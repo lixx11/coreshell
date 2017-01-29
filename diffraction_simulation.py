@@ -134,22 +134,6 @@ class Coreshell(object):
 
 
 if __name__ == '__main__':
-    argv = docopt(__doc__)
-    rotation_param = argv['--rotation-param']
-    output_dir= str(argv['--output-dir'])
-    comm = MPI.COMM_WORLD
-    size = comm.Get_size()
-    rank = comm.Get_rank()
-    if os.path.isdir(output_dir):
-        pass
-    else:
-        try:
-            os.makedirs('%s' %output_dir)
-        except Exception as e:
-            raise e
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', filename='%s.log' % os.path.join(output_dir, 'debug_%d' % rank))
-    logging.info('Input arguments: %s' % str(argv))
-
     model_size = 35
     oversampling_ratio = 7
     core_value = 79
@@ -160,7 +144,25 @@ if __name__ == '__main__':
     det_size = 401
     src_wavelength = 2.06E-10
 
-    if rank == 0:  # assign jobs
+    argv = docopt(__doc__)
+    rotation_param = argv['--rotation-param']
+    output_dir= str(argv['--output-dir'])
+    comm = MPI.COMM_WORLD
+    size = comm.Get_size()
+    rank = comm.Get_rank()
+    if rank == 0:
+
+
+    if rank == 0:
+        if os.path.isdir(output_dir):
+            pass
+        else:
+            try:
+                os.makedirs('%s' %output_dir)
+            except Exception as e:
+                raise e
+        logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', filename='%s.log' % os.path.join(output_dir, 'debug_%d' % rank))
+        logging.info('Input arguments: %s' % str(argv))
         rotation_list = rotation_param.split(',')
         alpha_min = float(rotation_list[0])
         alpha_max = float(rotation_list[1])
