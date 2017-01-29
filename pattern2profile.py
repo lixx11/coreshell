@@ -48,22 +48,23 @@ if __name__ == '__main__':
     mask = make_mask(det_mask=det_mask)
 
     h5f = h5py.File(output_dir + '/profile.h5')
+    count = 0
     for f in data_list:
         data = h5py.File(f, 'r')
         N_pattern = data['pattern'].shape[0]
         for i in range(N_pattern):
-            print i
             pattern = data['pattern'][i]
             euler_angle = data['euler_angle'][i]
             profile = pattern2profile(pattern, mask, binsize=1.8)
-            if i == 0:
+            if count == 0:
                 h5f.create_dataset("profile", data=profile.reshape((1, 101)), maxshape=(None, 101))
                 h5f.create_dataset("euler_angle", data=euler_angle.reshape((1, 3)), maxshape=(None, 3))
             else:
-                h5f['profile'].resize(i+1, axis=0)
-                h5f['euler_angle'].resize(i+1, axis=0)
-                h5f['profile'][i] = profile 
-                h5f['euler_angle'][i] = euler_angle
+                h5f['profile'].resize(count+1, axis=0)
+                h5f['euler_angle'].resize(count+1, axis=0)
+                h5f['profile'][count] = profile 
+                h5f['euler_angle'][count] = euler_angle
+            count += 1
     h5f.close()
 
     
