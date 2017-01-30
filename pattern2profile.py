@@ -20,10 +20,9 @@ def pattern2profile(pattern, mask, binsize=1., log=True, ignore_negative=True):
     angular_mean = angular_sum / ntheta
     angular_mean[np.isinf(angular_mean)] = 0.
     angular_mean[np.isnan(angular_mean)] = 0.
+    angular_mean /= angular_mean.mean()
     if log:
-        angular_mean = np.log(np.abs(angular_mean)+1.)
-    # normalization
-    angular_mean /= angular_mean.max()
+        angular_mean = np.log(angular_mean + 1.)
     return angular_mean
 
 
