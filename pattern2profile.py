@@ -4,6 +4,8 @@ import h5py
 
 
 def pattern2profile(pattern, mask, binsize=1., log=True, ignore_negative=True):
+    pattern = pattern.copy()
+    mask = mask.copy()
     assert pattern.shape[0] == pattern.shape[1]  # must be a square shape
     if ignore_negative:
         pattern[pattern < 0] = 0.
