@@ -1,3 +1,17 @@
+#!/usr/bin/env python
+
+'''Determine particle size for coreshell patterns.
+Usage:
+    determine_size.py -r <orientation_file> -m <mask_file> [options]
+
+Options:
+    -h --help                   Show this screen.
+    -r orientation_file         Orientation result filepath.
+    -m mask_file                Mask filepath.
+    --output-dir=output_dir     Output directory [default: output].
+'''
+
+
 import numpy as np 
 import scipy as sp 
 import h5py
@@ -6,8 +20,9 @@ import os
 from pattern2profile import *
 from scipy.ndimage.interpolation import rotate
 from scipy.signal import savgol_filter, argrelmax
-from diffraction_simulation import *
+from simulate_diffraction import *
 import matplotlib.pyplot as plt
+from docopt import docopt
 
 
 def calc_across_center_line_profile(image, center, angle=0., width=1, mask=None, mode='sum'):
@@ -108,10 +123,17 @@ def remove_abnormal_spacing(spacing_array):
             spacing_array = np.delete(spacing_array, [_farmost_index])
     return spacing_array
 
-if __name__ == '__main__':
-    orientation = h5py.File('output/orientation.h5', 'r')
-    total_job = orientation['euler_angles'].shape[0]
 
+if __name__ == '__main__':
+    # parse command options
+    argv = docopt(__doc__)
+    orientation_file = argv['-r']
+    mask_file = argv['-m']
+    output_dir = argv['--output-dir']
+    orientation = h5py.File(orientation_file, 'r')
+
+    total_job = orientation['euler_angles'].shape[0]
+    # diffraction parameters
     model_size = 35
     oversampling_ratio = 7
     core_value = 79
@@ -122,9 +144,11 @@ if __name__ == '__main__':
     det_size = 401
     src_wavelength = 2.06E-10
 
-    coreshell = Coreshell(model_size=model_size, oversampling_ratio=oversampling_ratio)
-    grid_size = cal_grid_size(particle_size=particle_size, det_ps=det_ps, det_dist=det_dist, det_size=det_size,\
-                              src_wavelength=src_wavelength, oversampling_ratio=oversampling_ratio)
+    coreshell = Coreshell(model_size=model_size, 
+        oversampling_ratio=oversampling_ratio)
+    grid_size = cal_grid_size(particle_size=particle_size, det_ps=det_ps, 
+        det_dist=det_dist, det_size=det_size, src_wavelength=src_wavelength, 
+        oversampling_ratio=oversampling_ratio)
     intensity3D = np.abs(coreshell.inverse_space) ** 2.
 
     comm = MPI.COMM_WORLD
@@ -138,7 +162,7 @@ if __name__ == '__main__':
         job_idx = np.arange(rank * job_size, (rank + 1) * job_size)
     print('Rank %d processing %d task: %s' % (rank, len(job_idx), str(job_idx)))
 
-    det_mask = np.load('mask.npy')
+    det_mask = np.load(mask_file)
     mask = make_mask(det_mask=det_mask, inner_radii=90)
 
     exp_max_angles = []
@@ -157,12 +181,12 @@ if __name__ == '__main__':
         frame = orientation['frames'][job_id]
         pcc = orientation['max_pccs'][job_id]
         euler_angle = orientation['euler_angles'][job_id]
-        path = '/Users/lixuanxuan/Data/jun13/mat/data/' + os.path.basename(path)
         exp_pattern = h5py.File(path, 'r')['patterns'][frame].T
         exp_angular_profile = pattern2profile(exp_pattern, mask, log=False)
         exp_max_angle = np.argmax(exp_angular_profile)
         exp_max_intensity = exp_angular_profile[exp_max_angle] / exp_angular_profile.mean()
-        exp_across_center_line_profile = calc_across_center_line_profile(exp_pattern, (200, 200), angle=exp_max_angle, width=5, mask=det_mask)
+        exp_across_center_line_profile = calc_across_center_line_profile(exp_pattern, (200, 200), 
+            angle=exp_max_angle, width=5, mask=det_mask)
         exp_across_center_line_profile_smoothed = savgol_filter(exp_across_center_line_profile, 15, 3)
         exp_maximum_idx = argrelmax(exp_across_center_line_profile_smoothed, order=11)[0]
         exp_spacing = exp_maximum_idx[1:] - exp_maximum_idx[:-1]
@@ -171,14 +195,16 @@ if __name__ == '__main__':
         sim_pattern = slice2D(intensity3D, euler_angle, grid_size, det_size)
         sim_angular_profile = pattern2profile(sim_pattern, mask, log=False)
         sim_max_angle = np.argmax(sim_angular_profile)
-        sim_across_center_line_profile = calc_across_center_line_profile(sim_pattern, (200, 200), angle=exp_max_angle, width=5, mask=det_mask)
+        sim_across_center_line_profile = calc_across_center_line_profile(sim_pattern, (200, 200), 
+            angle=exp_max_angle, width=5, mask=det_mask)
         sim_across_center_line_profile_smoothed = savgol_filter(sim_across_center_line_profile, 15, 3)
         sim_maximum_idx = argrelmax(sim_across_center_line_profile_smoothed, order=11)[0]
         sim_spacing = sim_maximum_idx[1:] - sim_maximum_idx[:-1]
         sim_spacing = remove_abnormal_spacing(sim_spacing)
 
         exp_particle_size = sim_spacing.mean() / exp_spacing.mean() * particle_size
-        print('Rank %d, path %s, frame %d, pcc %.2f, euler_angle %s, size %.3e' % (rank, path, frame, pcc, str(euler_angle), exp_particle_size))
+        print('Rank %d, path %s, frame %d, pcc %.2f, euler_angle %s, size %.3e' % 
+            (rank, path, frame, pcc, str(euler_angle), exp_particle_size))
 
         exp_max_angles.append(exp_max_angle)
         exp_spacing_stds.append(exp_spacing.std())
@@ -191,7 +217,7 @@ if __name__ == '__main__':
         euler_angles.append(euler_angle)
         exp_particle_sizes.append(exp_particle_size)
 
-    to_h5 = h5py.File('output/size_%d.h5' % rank)
+    to_h5 = h5py.File('%s/size_%d.h5' % (output_dir, rank))
     to_h5.create_dataset('paths', data=paths)
     to_h5.create_dataset('frames', data=frames)
     to_h5.create_dataset('euler_angles', data=euler_angles)
