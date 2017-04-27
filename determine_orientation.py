@@ -1,14 +1,36 @@
+#!/usr/bin/env python
+
+'''Determine orientation for coreshell patterns.
+Usage:
+    determine_orientation.py -r <reference_file> -m <mask_file> <pattern_files>... [options]
+
+Options:
+    -h --help                   Show this screen.
+    -r reference_file           Reference profile filepath.
+    -m mask_file                Mask filepath.
+    --output-dir=output_dir     Output directory [default: output].
+'''
+
+
 import numpy as np
 import glob
 import h5py
 from mpi4py import MPI
 from pattern2profile import *
 from scipy.stats import pearsonr
+from docopt import docopt
+import os
+import sys
 
 
 if __name__ == '__main__':
-    output_dir = 'output'
-    reference = h5py.File('/Users/lixuanxuan/Downloads/profile.h5', 'r')
+    # parse command options
+    argv = docopt(__doc__)
+    reference_file = argv['-r']
+    mask_file = argv['-m']
+    pattern_files = argv['<pattern_files>']
+    output_dir = argv['--output-dir']
+    reference = h5py.File(reference_file, 'r')
     ref_profiles = reference['profile'].value
     ref_euler_angle = reference['euler_angle'].value
 
@@ -17,17 +39,22 @@ if __name__ == '__main__':
     rank = comm.Get_rank()
 
     if rank == 0:
-        exp_files = glob.glob('/Users/lixuanxuan/Data/jun13/mat/data/r*alg*.mat')
-        print('Experimental data: %s' % str(exp_files))
-        print('Total experiment files: %d' % len(exp_files))
-
-        job_size = len(exp_files) // size
+        if os.path.isdir(output_dir):
+            pass
+        else:
+            try:
+                os.makedirs('%s' %output_dir)
+            except Exception as e:
+                raise e
+        print('Experimental data: %s' % str(pattern_files))
+        print('Total experiment files: %d' % len(pattern_files))
+        job_size = len(pattern_files) // size
         jobs = []
         for i in range(size):
             if i == (size - 1):
-                job = exp_files[i*job_size:]
+                job = pattern_files[i*job_size:]
             else:
-                job = exp_files[i*job_size : (i+1)*job_size]
+                job = pattern_files[i*job_size:(i+1)*job_size]
             jobs.append(job)
             if i == 0:
                 continue
@@ -40,7 +67,7 @@ if __name__ == '__main__':
         print('Rank %d receive job: %s' % (rank, str(job)))
     comm.barrier()
 
-    det_mask = np.load('mask.npy')
+    det_mask = np.load(mask_file)
     mask = make_mask(det_mask=det_mask)
     h5f = h5py.File('%s/orientation_%d.h5' % (output_dir, rank))
     paths = []
