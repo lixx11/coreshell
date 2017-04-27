@@ -17,6 +17,7 @@ Options:
     --rotation-number=rotation_number       Rotation euler angle number, only valid
                                             in 'random' method [default: 100].
     --output-dir=output_dir                 Output directory [default: output].
+    --particle-size=particle_size           Coreshell size in nanometer [default: 52].
 '''
 
 from docopt import docopt
@@ -185,7 +186,6 @@ if __name__ == '__main__':
     oversampling_ratio = 7
     core_value = 79
     shell_value = 46
-    particle_size = 52E-9
     det_ps = 110E-6
     det_dist = 0.565
     det_size = 401
@@ -196,6 +196,7 @@ if __name__ == '__main__':
     rotation_method = argv['--rotation-method']
     rotation_number = int(argv['--rotation-number'])
     output_dir= str(argv['--output-dir'])
+    particle_size = float(argv['--particle-size']) * 1E-9
     comm = MPI.COMM_WORLD
     size = comm.Get_size()
     rank = comm.Get_rank()
