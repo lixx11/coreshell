@@ -1,11 +1,27 @@
+#!/usr/bin/env python
+
+'''Merge multiple h5 files into single h5.
+Usage:
+    merge_h5.py <pattern_files>... [-o <output>] 
+
+Options:
+    -h --help             Show this screen.
+    -o output             Output directory [default: output].
+'''
+
+
 import h5py
 import glob
 import numpy as np
+from docopt import docopt
 
 
 if __name__ == '__main__':
-    from_h5_files = glob.glob('output/orientation_*.h5')
-    to_h5_file = h5py.File('output/orientation.h5')
+    # parse command options
+    argv = docopt(__doc__)
+    from_h5_files = argv['<pattern_files>']
+    output = argv['-o']
+    to_h5_file = h5py.File(output)
     N = len(from_h5_files)
     data_dict = {}
     for i in range(N):
@@ -21,4 +37,3 @@ if __name__ == '__main__':
     for key in data_dict.keys():
         to_h5_file.create_dataset(key, data=data_dict[key])
     to_h5_file.close()
-
