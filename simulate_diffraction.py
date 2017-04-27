@@ -1,20 +1,33 @@
+#!/usr/bin/env python
+
 '''Simulate diffraction patterns for coreshell particle.
 Usage:
     simulate_diffraction_patterns.py [options]
 
 Options:
-    -h --help                                       Show this screen.
-    --rotation-param=rotation_param                 rotation parameters in zxz Euler format: alpha_min, alpha_max, alpha_step, beta_min, beta_max, beta_step, gamma_min, gamma_max, gamma_step [default: 0,30,10,0,30,10,0,30,10].
-    --output-dir=output_dir                         Output directory [default: output].
+    -h --help                               Show this screen.
+    --rotation-method=rotation_method       Rotation euler angle generation method: 
+                                            'grid' or 'random' [default: grid].
+    --rotation-param=rotation_param         Rotation parameters in zxz Euler format,
+                                            only valid in 'grid' method: 
+                                            alpha_min, alpha_max, alpha_step, 
+                                            beta_min, beta_max, beta_step, 
+                                            gamma_min, gamma_max, gamma_step 
+                                            [default: 0,30,10,0,30,10,0,30,10].
+    --rotation-number=rotation_number       Rotation euler angle number, only valid
+                                            in 'random' method [default: 100].
+    --output-dir=output_dir                 Output directory [default: output].
 '''
 
 from docopt import docopt
 import numpy as np
 from numpy import fft
+import math
 from math import cos, sin
 import scipy.interpolate as spint
 import logging
 import os
+import sys
 from mpi4py import MPI
 import time
 import h5py
@@ -37,9 +50,7 @@ def slice2D(data, euler_angle, grid_size, pattern_size):
 
     Rx = lambda t: np.array([[1, 0, 0], [0, cos(t), -sin(t)], [0, sin(t), cos(t)]], dtype=float)
     Rz = lambda t: np.array([[cos(t), -sin(t), 0], [sin(t), cos(t), 0], [0, 0, 1]], dtype=float)
-    # print('before dot')
     sp_points_rotated = Rz(euler_angle[0]).dot(Rx(euler_angle[1])).dot(Rz(euler_angle[2])).dot(sp_points)
-    # print('after dot')
     RGI = spint.RegularGridInterpolator
     model_spacing = np.arange(0, model_size) - (model_size-1.)/2.
     rgi = RGI(points=[model_spacing]*3, values=data, bounds_error=False, fill_value=0)
@@ -133,6 +144,42 @@ class Coreshell(object):
         return real_space, inverse_space
 
 
+def generate_euler_angle_grids(rotation_list):
+    alpha_min = float(rotation_list[0])
+    alpha_max = float(rotation_list[1])
+    alpha_step = float(rotation_list[2])
+    beta_min = float(rotation_list[3])
+    beta_max = float(rotation_list[4])
+    beta_step = float(rotation_list[5])
+    gamma_min = float(rotation_list[6])
+    gamma_max = float(rotation_list[7])
+    gamma_step = float(rotation_list[8])
+    alpha = np.linspace(alpha_min, alpha_max, (alpha_max-alpha_min)/alpha_step+1)
+    beta = np.linspace(beta_min, beta_max, (beta_max-beta_min)/beta_step+1)
+    gamma = np.linspace(gamma_min, gamma_max, (gamma_max-gamma_min)/gamma_step+1)
+    alphas, betas, gammas = np.meshgrid(alpha, beta, gamma)
+    return alphas, betas, gammas
+
+
+def generate_uniform_euler_angles(N):
+    """
+    Generate euler angles alphas, betas, gammas, (alpha, beta) pair
+    is evenly distributed on unit sphere using fibonacci lattice.
+    """
+    golden_ratio = (1. + math.sqrt(5.)) / 2.
+    z_offset = 2. / N
+
+    z = (2. * np.arange(0, N).astype(np.float64) - N + 1.) / N
+    r = np.sqrt(1. - z**2.)
+    lon = np.arange(0, N) * 2 * np.pi / golden_ratio
+    lat = np.arcsin(z / 1.)
+
+    alphas = np.rad2deg(lon % (2. * np.pi))
+    betas = np.rad2deg(lat + np.pi / 2.)
+    gammas = np.rad2deg(np.random.rand(N) * 2. * np.pi)
+    return alphas, betas, gammas
+
+
 if __name__ == '__main__':
     model_size = 35
     oversampling_ratio = 7
@@ -146,6 +193,8 @@ if __name__ == '__main__':
 
     argv = docopt(__doc__)
     rotation_param = argv['--rotation-param']
+    rotation_method = argv['--rotation-method']
+    rotation_number = int(argv['--rotation-number'])
     output_dir= str(argv['--output-dir'])
     comm = MPI.COMM_WORLD
     size = comm.Get_size()
@@ -161,33 +210,29 @@ if __name__ == '__main__':
                 raise e
         logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', filename='%s.log' % os.path.join(output_dir, 'debug_%d' % rank))
         logging.info('Input arguments: %s' % str(argv))
-        rotation_list = rotation_param.split(',')
-        alpha_min = float(rotation_list[0])
-        alpha_max = float(rotation_list[1])
-        alpha_step = float(rotation_list[2])
-        beta_min = float(rotation_list[3])
-        beta_max = float(rotation_list[4])
-        beta_step = float(rotation_list[5])
-        gamma_min = float(rotation_list[6])
-        gamma_max = float(rotation_list[7])
-        gamma_step = float(rotation_list[8])
-        alpha = np.linspace(alpha_min, alpha_max, (alpha_max-alpha_min)/alpha_step+1)
-        beta = np.linspace(beta_min, beta_max, (beta_max-beta_min)/beta_step+1)
-        gamma = np.linspace(gamma_min, gamma_max, (gamma_max-gamma_min)/gamma_step+1)
-        mesh_alpha, mesh_beta, mesh_gamma = np.meshgrid(alpha, beta, gamma)
+        if rotation_method == 'grid':
+            print('Generate grid rotation')
+            rotation_list = rotation_param.split(',')
+            alphas, betas, gammas = generate_euler_angle_grids(rotation_list)
+        elif rotation_method == 'random':
+            print('Generate random rotation')
+            alphas, betas, gammas = generate_uniform_euler_angles(rotation_number)
+        else:
+            print('Wrong rotation method: %s' % rotation_method)
+            sys.exit()
 
-        N_jobs = mesh_alpha.size
+        N_jobs = alphas.size
         logging.info('Generating %d orientaions for simulation' % N_jobs)
         N_subjobs = N_jobs // size
         for i in range(size):
             if i == (size-1):
-                job_alpha = mesh_alpha.flat[i*N_subjobs:]
-                job_beta = mesh_beta.flat[i*N_subjobs:]
-                job_gamma = mesh_gamma.flat[i*N_subjobs:]
+                job_alpha = alphas.flat[i*N_subjobs:]
+                job_beta = betas.flat[i*N_subjobs:]
+                job_gamma = gammas.flat[i*N_subjobs:]
             else:
-                job_alpha = mesh_alpha.flat[i*N_subjobs:(i+1)*N_subjobs]
-                job_beta = mesh_beta.flat[i*N_subjobs:(i+1)*N_subjobs]
-                job_gamma = mesh_gamma.flat[i*N_subjobs:(i+1)*N_subjobs]
+                job_alpha = alphas.flat[i*N_subjobs:(i+1)*N_subjobs]
+                job_beta = betas.flat[i*N_subjobs:(i+1)*N_subjobs]
+                job_gamma = gammas.flat[i*N_subjobs:(i+1)*N_subjobs]
             job_euler_angle = np.stack((job_alpha, job_beta, job_gamma), axis=1)
             np.savetxt('%s/job_%d' % (output_dir, i), job_euler_angle, fmt='%.2f %.2f %.2f')
 
@@ -201,8 +246,8 @@ if __name__ == '__main__':
     job_euler_angle = np.loadtxt('%s/job_%d' % (output_dir, rank))
     job_size = job_euler_angle.shape[0]
     h5f = h5py.File('%s/data_%d.h5' % (output_dir, rank))
-    h5f.create_dataset('pattern', shape=(job_size, det_size, det_size))
-    h5f.create_dataset('euler_angle', shape=(job_size, 3))
+    h5f.create_dataset('patterns', shape=(job_size, det_size, det_size))
+    h5f.create_dataset('euler_angles', shape=(job_size, 3))
     t0 = time.time()
     for i in range(job_size):
         print('Rank %d processing %d/%d task, ' % (rank, i+1, job_size)),
@@ -213,6 +258,6 @@ if __name__ == '__main__':
         euler_angle = job_euler_angle[i]
         pattern = slice2D(intensity3D, euler_angle, grid_size, det_size)
         # write to h5
-        h5f['pattern'][i] = pattern
-        h5f['euler_angle'][i] = euler_angle
+        h5f['patterns'][i] = pattern
+        h5f['euler_angles'][i] = euler_angle
     h5f.close()
