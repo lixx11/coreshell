@@ -2,12 +2,13 @@
 
 '''Determine orientation for coreshell patterns.
 Usage:
-    determine_orientation.py -r <reference_file> -m <mask_file> <pattern_files>... [options]
+    determine_orientation.py -r <reference_file> <pattern_files>... [options]
 
 Options:
     -h --help                   Show this screen.
     -r reference_file           Reference profile filepath.
-    -m mask_file                Mask filepath.
+    --apply-mask=apple_mask     Whether to apply mask [default: False].
+    --mask=mask_file            Mask file in npy format [default: None].
     --output-dir=output_dir     Output directory [default: output].
 '''
 
@@ -27,7 +28,8 @@ if __name__ == '__main__':
     # parse command options
     argv = docopt(__doc__)
     reference_file = argv['-r']
-    mask_file = argv['-m']
+    apply_mask = argv['--apply-mask']
+    mask_file = argv['--mask']
     pattern_files = argv['<pattern_files>']
     output_dir = argv['--output-dir']
     reference = h5py.File(reference_file, 'r')
@@ -67,8 +69,11 @@ if __name__ == '__main__':
         print('Rank %d receive job: %s' % (rank, str(job)))
     comm.barrier()
 
-    det_mask = np.load(mask_file)
-    mask = make_mask(det_mask=det_mask)
+    if apply_mask == 'True':
+        det_mask = np.load(mask_file)
+        mask = make_mask(det_mask=det_mask)
+    else:
+        mask = np.ones((401, 401))
     h5f = h5py.File('%s/orientation_%d.h5' % (output_dir, rank))
     paths = []
     frames = []
