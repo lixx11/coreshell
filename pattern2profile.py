@@ -1,11 +1,26 @@
+#!/usr/bin/env python
+
+'''Convert 2D diffraction patterns to 1D angular profiles.
+Usage:
+    pattern2profile.py <pattern_file>... [options]
+
+Options:
+    -h --help                               Show this screen.
+    --output-dir=output_dir                 Output directory [default: output].
+    --apply-mask=apple_mask                 Whether to apply mask [default: False].
+    --mask=mask_file                        Mask file in npy format [default: None].
+'''
+
 import numpy as np
 import glob
 import h5py
+from mpi4py import MPI
+from docopt import docopt
+from tqdm import tqdm
 
 
 def pattern2profile(pattern, mask, binsize=1., log=True, ignore_negative=True):
     pattern = pattern.copy()
-    mask = mask.copy()
     assert pattern.shape[0] == pattern.shape[1]  # must be a square shape
     if ignore_negative:
         pattern[pattern < 0] = 0.
@@ -42,30 +57,62 @@ def make_mask(mask_size=401, inner_radii=75, outer_radii=150, det_mask=None):
 
 
 if __name__ == '__main__':
-    data_dir = 'output'
-    data_list = glob.glob(data_dir + '/data*.h5')
-    output_dir = 'output'
-    det_mask = np.load('mask.npy')
-    mask = make_mask(det_mask=det_mask)
+    # parse command options
+    argv = docopt(__doc__)
+    pattern_files = argv['<pattern_file>']
+    output_dir = argv['--output-dir']
+    apply_mask = argv['--apply-mask']
+    mask_file = argv['--mask']
 
-    h5f = h5py.File(output_dir + '/profile.h5')
-    count = 0
-    for f in data_list:
-        data = h5py.File(f, 'r')
-        N_pattern = data['pattern'].shape[0]
-        for i in range(N_pattern):
+    comm = MPI.COMM_WORLD
+    size = comm.Get_size()
+    rank = comm.Get_rank()
+
+    if rank == 0:
+        print('Pattern files: %s' % str(pattern_files))
+        print('Total pattern files: %d' % len(pattern_files))
+        job_size = len(pattern_files) // size
+        jobs = []
+        for i in range(size):
+            if i == (size - 1):
+                job = pattern_files[i*job_size:]
+            else:
+                job = pattern_files[i*job_size:(i+1)*job_size]
+            jobs.append(job)
+            if i == 0:
+                continue
+            else:
+                comm.send(job, dest=i)
+                print('Rank 0 send job to rank %d: %s' % (i, str(job)))
+        job = jobs[0]
+    else:
+        job = comm.recv(source=0)
+        print('Rank %d receive job: %s' % (rank, str(job)))
+    comm.barrier()
+
+    # Convert to profiles
+    if apply_mask == 'True':
+        det_mask = np.load(mask_file)
+        mask = make_mask(det_mask=det_mask)
+    else:
+        mask = np.ones((401, 401))
+    count = 0 
+    output = h5py.File('%s/profile_%d.h5' % (output_dir, rank))
+    for i in range(len(job)):
+        print('===========Rank %d processing %d/%d: %s=============' % (rank, i, len(job)-1, job[i]))
+        data = h5py.File(job[i], 'r')
+        nb_patterns = data['pattern'].shape[0]
+        for j in tqdm(range(nb_patterns)):
             pattern = data['pattern'][i]
             euler_angle = data['euler_angle'][i]
             profile = pattern2profile(pattern, mask, binsize=1.8)
             if count == 0:
-                h5f.create_dataset("profile", data=profile.reshape((1, 101)), maxshape=(None, 101))
-                h5f.create_dataset("euler_angle", data=euler_angle.reshape((1, 3)), maxshape=(None, 3))
+                output.create_dataset("profile", data=profile.reshape((1, 101)), maxshape=(None, 101))
+                output.create_dataset("euler_angle", data=euler_angle.reshape((1, 3)), maxshape=(None, 3))
             else:
-                h5f['profile'].resize(count+1, axis=0)
-                h5f['euler_angle'].resize(count+1, axis=0)
-                h5f['profile'][count] = profile 
-                h5f['euler_angle'][count] = euler_angle
+                output['profile'].resize(count+1, axis=0)
+                output['euler_angle'].resize(count+1, axis=0)
+                output['profile'][count] = profile 
+                output['euler_angle'][count] = euler_angle
             count += 1
-    h5f.close()
-
-    
+    output.close()
