@@ -10,10 +10,7 @@ Options:
     --max-intensity=max_intensity       Min max intensity accepted [default: 2.5].
     --exp-spacing-std=exp_spacing_std   Max standard derivation of experimental spacing [default: 1.0].
     --sim-spacing-std=sim_spacing_std   Max standard derivation of simulated spacing [default: 1.0].
-    --expected-size=expected_size       Expected particle size in nanometer[default: 52].
     --diff-angle=diff_angle             Max angle difference between simulated and experimental pattern [default: 3].
-    --upper-limit=upper_limit           Upper limit ratio of particle size against expected [default: 1.5].
-    --lower-limit=lower_limit           Lower limit ratio of particle size against expected [default: 0.5].
     --output=output_dir                 Output filename [default: size.txt].
 '''
 
@@ -53,9 +50,7 @@ if __name__ == '__main__':
                 and exp_max_intensities[i] > min_max_intensity \
                 and exp_spacing_stds[i] < max_exp_spacing_std \
                 and (exp_max_angles[i] - sim_max_angles[i]) < diff_angle \
-                and sim_spacing_stds[i] < max_sim_spacing_size \
-                and exp_particle_sizes[i] < expected_size * upper_limit \
-                and exp_particle_sizes[i] > expected_size * lower_limit:
+                and sim_spacing_stds[i] < max_sim_spacing_size:
                 valid_sizes.append(exp_particle_sizes[i])
     valid_sizes = np.asarray(valid_sizes)
     np.savetxt(output, valid_sizes)
