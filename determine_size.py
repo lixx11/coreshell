@@ -2,12 +2,13 @@
 
 '''Determine particle size for coreshell patterns.
 Usage:
-    determine_size.py -r <orientation_file> -m <mask_file> [options]
+    determine_size.py -r <orientation_file> [options]
 
 Options:
     -h --help                   Show this screen.
     -r orientation_file         Orientation result filepath.
-    -m mask_file                Mask filepath.
+    --apply-mask=apple_mask     Whether to apply mask [default: False].
+    --mask=mask_file            Mask file in npy format [default: None].
     --output-dir=output_dir     Output directory [default: output].
 '''
 
@@ -128,7 +129,8 @@ if __name__ == '__main__':
     # parse command options
     argv = docopt(__doc__)
     orientation_file = argv['-r']
-    mask_file = argv['-m']
+    apply_mask = argv['--apply-mask']
+    mask_file = argv['--mask']
     output_dir = argv['--output-dir']
     orientation = h5py.File(orientation_file, 'r')
 
@@ -162,9 +164,12 @@ if __name__ == '__main__':
         job_idx = np.arange(rank * job_size, (rank + 1) * job_size)
     print('Rank %d processing %d task: %s' % (rank, len(job_idx), str(job_idx)))
 
-    det_mask = np.load(mask_file)
-    mask = make_mask(det_mask=det_mask, inner_radii=90)
-
+    if apply_mask == 'True':
+        det_mask = np.load(mask_file)
+        mask = make_mask(det_mask=det_mask)
+    else:
+        mask = make_mask(det_mask=None)
+        
     exp_max_angles = []
     exp_spacing_stds = []
     exp_max_intensities = []
