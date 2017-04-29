@@ -103,8 +103,8 @@ if __name__ == '__main__':
         data = h5py.File(job[i], 'r')
         nb_patterns = data['pattern'].shape[0]
         for j in tqdm(range(nb_patterns)):
-            pattern = data['pattern'][i]
-            euler_angle = data['euler_angle'][i]
+            pattern = data['pattern'][j]
+            euler_angle = data['euler_angle'][j]
             profile = pattern2profile(pattern, mask, binsize=1.8)
             if count == 0:
                 output.create_dataset("profile", data=profile.reshape((1, 101)), maxshape=(None, 101))
