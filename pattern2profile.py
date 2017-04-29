@@ -95,7 +95,7 @@ if __name__ == '__main__':
         det_mask = np.load(mask_file)
         mask = make_mask(det_mask=det_mask)
     else:
-        mask = np.ones((401, 401))
+        mask = make_mask(det_mask=None)
     count = 0 
     output = h5py.File('%s/profile_%d.h5' % (output_dir, rank))
     for i in range(len(job)):
