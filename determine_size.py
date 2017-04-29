@@ -169,7 +169,7 @@ if __name__ == '__main__':
         mask = make_mask(det_mask=det_mask)
     else:
         mask = make_mask(det_mask=None)
-        
+
     exp_max_angles = []
     exp_spacing_stds = []
     exp_max_intensities = []
@@ -191,7 +191,7 @@ if __name__ == '__main__':
         exp_max_angle = np.argmax(exp_angular_profile)
         exp_max_intensity = exp_angular_profile[exp_max_angle] / exp_angular_profile.mean()
         exp_across_center_line_profile = calc_across_center_line_profile(exp_pattern, (200, 200), 
-            angle=exp_max_angle, width=5, mask=det_mask)
+            angle=exp_max_angle, width=5, mask=mask)
         exp_across_center_line_profile_smoothed = savgol_filter(exp_across_center_line_profile, 15, 3)
         exp_maximum_idx = argrelmax(exp_across_center_line_profile_smoothed, order=11)[0]
         exp_spacing = exp_maximum_idx[1:] - exp_maximum_idx[:-1]
@@ -201,7 +201,7 @@ if __name__ == '__main__':
         sim_angular_profile = pattern2profile(sim_pattern, mask, log=False)
         sim_max_angle = np.argmax(sim_angular_profile)
         sim_across_center_line_profile = calc_across_center_line_profile(sim_pattern, (200, 200), 
-            angle=exp_max_angle, width=5, mask=det_mask)
+            angle=exp_max_angle, width=5, mask=mask)
         sim_across_center_line_profile_smoothed = savgol_filter(sim_across_center_line_profile, 15, 3)
         sim_maximum_idx = argrelmax(sim_across_center_line_profile_smoothed, order=11)[0]
         sim_spacing = sim_maximum_idx[1:] - sim_maximum_idx[:-1]
