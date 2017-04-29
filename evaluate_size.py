@@ -24,14 +24,11 @@ if __name__ == '__main__':
     # parse command options
     argv = docopt(__doc__)
     size_files = argv['<size_files>']
-    expected_size = float(argv['--expected-size']) * 1E-9
     min_pcc = float(argv['--pcc'])
     min_max_intensity = float(argv['--max-intensity'])
     max_exp_spacing_std = float(argv['--exp-spacing-std'])
     max_sim_spacing_size = float(argv['--sim-spacing-std'])
     diff_angle = float(argv['--diff-angle'])
-    upper_limit = float(argv['--upper-limit'])
-    lower_limit = float(argv['--lower-limit'])
     output = argv['--output']
 
     # do evaluation and collection
