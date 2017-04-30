@@ -112,6 +112,14 @@ def calc_across_center_line_profile(image, center, angle=0., width=1, mask=None,
         raise ValueError('Wrong mode: %s' %mode)
 
 
+def calc_across_center_line_profile_2(image, angle=0., width=1, mask=None):
+    rot_img = rotate(image*mask, angle)
+    rot_sy, rot_sx = rot_img.shape
+    across_line = rot_img[rot_sy//2-width//2:rot_sy//2-width//2+width, :]
+    across_line_sum = np.sum(across_line, axis=0)
+    return across_line_sum
+
+
 def remove_abnormal_spacing(spacing_array):
     while True:
         spacing_array_std = spacing_array.std()
@@ -166,9 +174,11 @@ if __name__ == '__main__':
 
     if apply_mask == 'True':
         det_mask = np.load(mask_file)
-        mask = make_mask(det_mask=det_mask)
+        mask = make_mask(det_mask=det_mask, 
+            inner_radii=50, outer_radii=300)
     else:
-        mask = make_mask(det_mask=None)
+        mask = make_mask(det_mask=None, 
+            inner_radii=50, outer_radii=300)
 
     exp_max_angles = []
     exp_spacing_stds = []
@@ -190,9 +200,9 @@ if __name__ == '__main__':
         exp_angular_profile = pattern2profile(exp_pattern, mask, log=False)
         exp_max_angle = np.argmax(exp_angular_profile)
         exp_max_intensity = exp_angular_profile[exp_max_angle] / exp_angular_profile.mean()
-        exp_across_center_line_profile = calc_across_center_line_profile(exp_pattern, (200, 200), 
+        exp_across_center_line_profile = calc_across_center_line_profile_2(exp_pattern, 
             angle=exp_max_angle, width=5, mask=mask)
-        exp_across_center_line_profile_smoothed = savgol_filter(exp_across_center_line_profile, 15, 3)
+        exp_across_center_line_profile_smoothed = np.log(np.abs(exp_across_center_line_profile)+1.)
         exp_maximum_idx = argrelmax(exp_across_center_line_profile_smoothed, order=11)[0]
         exp_spacing = exp_maximum_idx[1:] - exp_maximum_idx[:-1]
         exp_spacing = remove_abnormal_spacing(exp_spacing)
@@ -200,9 +210,9 @@ if __name__ == '__main__':
         sim_pattern = slice2D(intensity3D, euler_angle, grid_size, det_size)
         sim_angular_profile = pattern2profile(sim_pattern, mask, log=False)
         sim_max_angle = np.argmax(sim_angular_profile)
-        sim_across_center_line_profile = calc_across_center_line_profile(sim_pattern, (200, 200), 
+        sim_across_center_line_profile = calc_across_center_line_profile_2(sim_pattern.copy(), 
             angle=exp_max_angle, width=5, mask=mask)
-        sim_across_center_line_profile_smoothed = savgol_filter(sim_across_center_line_profile, 15, 3)
+        sim_across_center_line_profile_smoothed = np.log(np.abs(sim_across_center_line_profile)+1.)
         sim_maximum_idx = argrelmax(sim_across_center_line_profile_smoothed, order=11)[0]
         sim_spacing = sim_maximum_idx[1:] - sim_maximum_idx[:-1]
         sim_spacing = remove_abnormal_spacing(sim_spacing)
